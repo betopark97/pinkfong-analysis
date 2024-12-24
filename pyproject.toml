@@ -1,0 +1,16 @@
+[project]
+name = "pinkfong-analysis"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "google-api-python-client>=2.156.0",
+    "google-generativeai==0.8.3",
+    "ipykernel==6.29.4",
+    "matplotlib==3.7.5",
+    "numpy==1.26.4",
+    "pandas==2.2.3",
+    "python-dotenv==1.0.1",
+    "requests==2.32.3",
+]
