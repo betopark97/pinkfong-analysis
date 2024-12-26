@@ -195,6 +195,7 @@ def main():
     print(f"{channel_id = }")
     
     df_channel_stats = get_channel_stats(channel_id)
+    df_channel_stats.to_csv('../data/raw/channel_stats.csv', header=True, index=False)
     print(f"{df_channel_stats = }")
     
     playlist_id = df_channel_stats['playlist_id'].values[0]

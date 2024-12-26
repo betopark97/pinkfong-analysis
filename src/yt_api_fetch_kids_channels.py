@@ -59,7 +59,7 @@ def get_channel_id(channel_name: str) -> str:
 
 # When given a channel_id it gives a row of channel stats
 def get_channel_stats(channel_id: str) -> pd.DataFrame:
-    youtube_api_key = os.environ.get('YOUTUBE_API_KEY3')
+    youtube_api_key = os.environ.get('YOUTUBE_API_KEY1')
     api_service_name = 'youtube'
     api_version = 'v3'
     youtube = googleapiclient.discovery.build(
@@ -80,8 +80,9 @@ def get_channel_stats(channel_id: str) -> pd.DataFrame:
     for item in response['items']:
         data = {
             'channel_id':item.get('id'),
-            'channel_name': item['snippet'].get('title'),
-            'created_at':item['snippet'].get('publishedAt'),
+            'channel_title': item['snippet'].get('title'),
+            'description': item['snippet'].get('description'),
+            'published_at':item['snippet'].get('publishedAt'),
             'country':item['snippet'].get('country'),
             'playlist_id':item['contentDetails']['relatedPlaylists'].get('uploads'),
             'view_count':item['statistics'].get('viewCount'),
@@ -127,20 +128,20 @@ def main():
     # Load env variables from .env
     load_dotenv()
     
-    # # Get top kids channels in a list
-    # channel_names = get_top_kids_channels()
-    # print(f"{channel_names = }")
+    # Get top kids channels in a list
+    channel_names = get_top_kids_channels()
+    print(f"{channel_names = }")
     
-    # # Get channel ids
-    # channel_ids = [get_channel_id(channel_name) for channel_name in channel_names]
-    # print(f"{channel_ids = }")
+    # Get channel ids
+    channel_ids = [get_channel_id(channel_name) for channel_name in channel_names]
+    print(f"{channel_ids = }")
     
-    # # Make a dataframe to save the channel names and ids
-    # df_channel_names_ids = pd.DataFrame({'channel_name': channel_names, 'channel_id': channel_ids})
-    # print(f"{df_channel_names_ids = }")
+    # Make a dataframe to save the channel names and ids
+    df_channel_names_ids = pd.DataFrame({'channel_name': channel_names, 'channel_id': channel_ids})
+    print(f"{df_channel_names_ids = }")
     
-    # # Save the dataframe
-    # df_channel_names_ids.to_csv('../data/external/top_kids_channels.csv', header=True, index=False)
+    # Save the dataframe
+    df_channel_names_ids.to_csv('../data/external/top_kids_channels.csv', header=True, index=False)
     
     # Get channel ids as list
     df_channel_names_ids = pd.read_csv('../data/external/top_kids_channels.csv')
