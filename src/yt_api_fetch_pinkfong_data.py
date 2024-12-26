@@ -54,8 +54,9 @@ def get_channel_stats(channel_id: str) -> pd.DataFrame:
     for item in response['items']:
         data = {
             'channel_id':item.get('id'),
-            'channel_name': item['snippet'].get('title'),
-            'created_at':item['snippet'].get('publishedAt'),
+            'channel_title': item['snippet'].get('title'),
+            'description': item['snippet'].get('description'),
+            'published_at':item['snippet'].get('publishedAt'),
             'country':item['snippet'].get('country'),
             'playlist_id':item['contentDetails']['relatedPlaylists'].get('uploads'),
             'view_count':item['statistics'].get('viewCount'),
