@@ -1,81 +1,159 @@
 import os
-from dotenv import load_dotenv
-import pandas as pd
+
 import googleapiclient.discovery
 import googleapiclient.errors
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 
 
+def get_top_kids_channels() -> list:
+    url = 'https://youtube-rank.com/board/bbs/board.php?bo_table=youtube&sca=키즈/어린이'
+    response = requests.get(url)
+    html_content = response.text
+    
+    # Parse the HTML using BeautifulSoup
+    soup = BeautifulSoup(html_content, 'html.parser')
 
-# Function to fetch top YouTube channels
-def fetch_top_kids_channels(max_results: int=50) -> pd.DataFrame:
-    # Youtube builder parameters
-    youtube_api_key = os.environ.get('YOUTUBE_API_KEY1')
+    # Use a CSS selector to target <a> tags inside <h1>, inside <td class="subject">
+    target_links = soup.select('td.subject > h1 > a')
+
+    # Extract the channel names
+    channel_names = [link.get_text(strip=True) for link in target_links]
+
+    return channel_names
+        
+# When given a handler (channel name), it returns a channel_id
+def get_channel_id(channel_name: str) -> str:
+    youtube_api_key = os.environ.get('YOUTUBE_API_KEY2')
     api_service_name = 'youtube'
     api_version = 'v3'
-    # Youtube API fetching builder
+    
+    # Build the YouTube API client
     youtube = googleapiclient.discovery.build(
         api_service_name,
         api_version,
         developerKey=youtube_api_key
     )
-
-    # Initialize empty list for holding the channel names    
-    channels_data = []
     
-    # Search for channels
-    request = youtube.search().list(
+    # Create a search request for the given channel name
+    search_request = youtube.search().list(
         part='snippet',
+        q=channel_name,
         type='channel',
-        regionCode='KR',
-        # videoCaption='ko',
-        relevanceLanguage='ko',
-        q='kids',
-        maxResults=max_results
+        maxResults=1  # Fetch only the most relevant result
     )
+    
+    # Execute the search request and get the response
+    search_response = search_request.execute()
+    
+    # Iterate over the items in the search response
+    for item in search_response['items']:
+        # Extract and return the channelId from the 'id' dictionary
+        if 'channelId' in item['id']:
+            return item['id']['channelId']
+    
+    # Return None if no channel ID is found
+    return None
+
+# When given a channel_id it gives a row of channel stats
+def get_channel_stats(channel_id: str) -> pd.DataFrame:
+    youtube_api_key = os.environ.get('YOUTUBE_API_KEY3')
+    api_service_name = 'youtube'
+    api_version = 'v3'
+    youtube = googleapiclient.discovery.build(
+        api_service_name,
+        api_version,
+        developerKey=youtube_api_key
+    )
+    # Create a request for the channel statistics of the given channel ID
+    request = youtube.channels().list(
+        part='snippet,contentDetails,statistics',
+        id=channel_id
+    )
+    # Execute the request and get the response
     response = request.execute()
     
-    # Fetch channel details
-    for item in response.get('items', []):
-        channel_id = item['id']['channelId']
-        channel_title = item['snippet']['title']
-        
-        # Get channel statistics
-        channel_request = youtube.channels().list(
-            part="snippet,statistics",
-            id=channel_id
-        )
-        channel_response = channel_request.execute()
-        
-        for channel in channel_response.get('items', []):
-            data = {
-                "channel_id": channel_id,
-                "channel_title": channel_title,
-                "subscribers": int(channel['statistics'].get('subscriberCount', 0)),
-                "total_views": int(channel['statistics'].get('viewCount', 0)),
-                "video_count": int(channel['statistics'].get('videoCount', 0)),
-                "description": channel['snippet'].get('description', ''),
-            }
-            channels_data.append(data)
+    # Loop through the necessary items and make a Dataframe
+    df_data = []
+    for item in response['items']:
+        data = {
+            'channel_id':item.get('id'),
+            'channel_name': item['snippet'].get('title'),
+            'created_at':item['snippet'].get('publishedAt'),
+            'country':item['snippet'].get('country'),
+            'playlist_id':item['contentDetails']['relatedPlaylists'].get('uploads'),
+            'view_count':item['statistics'].get('viewCount'),
+            'subscriber_count':item['statistics'].get('subscriberCount'),
+            'video_count':item['statistics'].get('videoCount'),
+        }
+        df_data.append(data)
+    df = pd.DataFrame(df_data)
     
-    # Create DataFrame
-    df = pd.DataFrame(channels_data)
-    
-    # Sort by subscriber count
-    df = df.sort_values(by='subscribers', ascending=False).reset_index(drop=True)
-    
+    # Return the Pandas Dataframe
     return df
+
+def get_channel_stats_in_chunks(channel_ids_list: list, chunk_size: int=50) -> pd.DataFrame:
+    # Split the channel IDs into chunks
+    chunks = [channel_ids_list[i:i + chunk_size] for i in range(0, len(channel_ids_list), chunk_size)]
+    
+    # Empty list to store DataFrames for each chunk
+    all_stats_dataframes = []
+    
+    # Iterate through each chunk
+    for chunk in chunks:
+        print(f"Processing chunk: {chunk}")
+        try:
+            # Join video IDs into a single string for API call
+            channel_ids = ','.join(chunk)
+            channel_stats_df = get_channel_stats(channel_ids)
+            print(f"Fetched stats for {len(chunk)} channels.")
+            all_stats_dataframes.append(channel_stats_df)
+        except Exception as e:
+            print(f"Error fetching stats for chunk {chunk}: {e}")
+    
+    # Combine all the DataFrames into one
+    if all_stats_dataframes:
+        combined_stats_df = pd.concat(all_stats_dataframes, ignore_index=True)
+    else:
+        combined_stats_df = pd.DataFrame()  # Handle case where no data is fetched
+    
+    return combined_stats_df
+
+
 
 def main():
     # Load env variables from .env
     load_dotenv()
     
-    # Fetch top YouTube channels
-    top_channels = fetch_top_kids_channels()
-    print(top_channels)
+    # # Get top kids channels in a list
+    # channel_names = get_top_kids_channels()
+    # print(f"{channel_names = }")
     
-    # Save top YouTube channels to CSV
-    top_channels.to_csv('../data/external/top_kids_channels_south_korea.csv', header=True, index=False)
-
+    # # Get channel ids
+    # channel_ids = [get_channel_id(channel_name) for channel_name in channel_names]
+    # print(f"{channel_ids = }")
+    
+    # # Make a dataframe to save the channel names and ids
+    # df_channel_names_ids = pd.DataFrame({'channel_name': channel_names, 'channel_id': channel_ids})
+    # print(f"{df_channel_names_ids = }")
+    
+    # # Save the dataframe
+    # df_channel_names_ids.to_csv('../data/external/top_kids_channels.csv', header=True, index=False)
+    
+    # Get channel ids as list
+    df_channel_names_ids = pd.read_csv('../data/external/top_kids_channels.csv')
+    channel_ids_list = df_channel_names_ids['channel_id'].tolist()
+    print(f"{channel_ids_list = }")
+    
+    # Get channel stats in chunks    
+    df_channel_stats = get_channel_stats_in_chunks(channel_ids_list)
+    print(f"{df_channel_stats = }")
+    
+    # Save the dataframe
+    df_channel_stats.to_csv('../data/external/top_kids_channel_stats.csv', header=True, index=False)
+    
 
 if __name__ == "__main__":
     main()
