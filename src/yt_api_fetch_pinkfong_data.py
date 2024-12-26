@@ -161,79 +161,6 @@ def get_video_stats_in_chunks(video_ids_list: list, chunk_size: int=50):
     
     return combined_stats_df
 
-# Function to fetch comments for a single video
-def get_video_comments(video_id: str) -> pd.DataFrame:
-    youtube_api_key = os.environ.get('YOUTUBE_API_KEY1')
-    api_service_name = 'youtube'
-    api_version = 'v3'
-    
-    youtube = googleapiclient.discovery.build(
-        api_service_name,
-        api_version,
-        developerKey=youtube_api_key
-    )
-    
-    # Initialize the comments list
-    comments = []
-    
-    # Use commentThreads endpoint to fetch comments
-    request = youtube.commentThreads().list(
-        part="snippet",
-        videoId=video_id,
-        maxResults=100  # Adjust the limit as needed
-    )
-    
-    while request:
-        response = request.execute()
-        
-        # Parse the response for comments
-        for item in response['items']:
-            comment = item['snippet']['topLevelComment']['snippet']
-            comments.append({
-                'video_id': video_id,
-                'comment_id': item['id'],
-                'author': comment.get('authorDisplayName'),
-                'text': comment.get('textOriginal'),
-                'like_count': comment.get('likeCount'),
-                'published_at': comment.get('publishedAt')
-            })
-        
-        # Check for next page token to paginate through results
-        request = youtube.commentThreads().list_next(request, response)
-    
-    # Convert comments to DataFrame
-    df = pd.DataFrame(comments)
-    
-    return df
-
-# Function to fetch comments for a list of video IDs
-def get_video_comments_in_chunks(video_ids_list: list, chunk_size: int=50):
-    # Split the video IDs into chunks
-    chunks = [video_ids_list[i:i + chunk_size] for i in range(0, len(video_ids_list), chunk_size)]
-    
-    # Empty list to store DataFrames for each chunk
-    all_comments_dataframes = []
-    
-    # Iterate through each chunk
-    for chunk in chunks:
-        print(f"Processing chunk: {chunk}")
-        for video_id in chunk:
-            try:
-                # Fetch comments for each video
-                video_comments_df = get_video_comments(video_id)
-                print(f"Fetched {len(video_comments_df)} comments for video ID {video_id}.")
-                all_comments_dataframes.append(video_comments_df)
-            except Exception as e:
-                print(f"Error fetching comments for video ID {video_id}: {e}")
-    
-    # Combine all the DataFrames into one
-    if all_comments_dataframes:
-        combined_comments_df = pd.concat(all_comments_dataframes, ignore_index=True)
-    else:
-        combined_comments_df = pd.DataFrame()  # Handle case where no data is fetched
-    
-    return combined_comments_df
-
 # Function to fetch video categories
 def get_video_category_names(region_code: str) -> pd.DataFrame:
     youtube_api_key = os.environ.get('YOUTUBE_API_KEY1')
@@ -277,18 +204,13 @@ def main():
     print(f"{video_ids_list = }")
     
     df_video_stats = get_video_stats_in_chunks(video_ids_list)
-    df_video_stats.to_csv('../data/external/video_stats.csv', header=True, index=False)
+    df_video_stats.to_csv('../data/raw/video_stats.csv', header=True, index=False)
     print(f"{df_video_stats = }")
     
-    ## The comment section for kids videos are disabled.
-    # df_video_comments = get_video_comments_in_chunks(video_ids_list)
-    # print(f"{df_video_comments = }")
-    
     df_video_categories = get_video_category_names('KR')
-    df_video_categories.to_csv('../data/external/video_categories.csv', header=True, index=False)
+    df_video_categories.to_csv('../data/raw/video_categories.csv', header=True, index=False)
     print(f"{df_video_categories = }")
-    
-    # df_video_comments.to_csv('../data/external/video_comments.csv', header=True, index=False)
+
 
 if __name__ == "__main__":
     main()
