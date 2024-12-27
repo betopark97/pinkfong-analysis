@@ -1,11 +1,13 @@
 import os
-from dotenv import load_dotenv
-import pandas as pd
+
 import googleapiclient.discovery
 import googleapiclient.errors
+import pandas as pd
+from dotenv import load_dotenv
 
-# When given a handler, it returns a channel_id
-def get_channel_id(handler: str) -> str:
+
+# When given a handle, it returns a channel_id
+def get_channel_id(handle: str) -> str:
     youtube_api_key = os.environ.get('YOUTUBE_API_KEY1')
     api_service_name = 'youtube'
     api_version = 'v3'
@@ -17,7 +19,7 @@ def get_channel_id(handler: str) -> str:
     # Create a search request for the given handle
     search_request = youtube.search().list(
         part='snippet',
-        q=handler,
+        q=handle,
         type='channel'
     )
     # Execute the search request and get the response
@@ -31,8 +33,31 @@ def get_channel_id(handler: str) -> str:
     # Return None if no channel ID is found
     return None
 
+# Create a dataframe for the channels table
+def create_channels_df(channel_data: dict) -> pd.DataFrame:
+    # Create a new list to store the channel information along with channel ids and YouTube links
+    channel_data_with_info = {
+        'channel_character': channel_data['channel_character'],
+        'channel_handle': channel_data['channel_handle'],
+        'channel_id': [],
+        'youtube_link': []
+    }
+
+    # For each handle, get the channel_id, construct the YouTube link, and add them to the lists
+    for handle in channel_data['channel_handle']:
+        channel_id = get_channel_id(handle)
+        youtube_link = f'https://www.youtube.com/channel/{channel_id}' if channel_id else None
+        channel_data_with_info['channel_id'].append(channel_id)
+        channel_data_with_info['youtube_link'].append(youtube_link)
+
+    # Create a DataFrame from the dictionary
+    df = pd.DataFrame(channel_data_with_info)
+
+    # Return the DataFrame
+    return df
+
 # When given a channel_id it gives a row of channel stats
-def get_channel_stats(channel_id: str) -> pd.DataFrame:
+def get_channel_data(channel_id: str) -> pd.DataFrame:
     youtube_api_key = os.environ.get('YOUTUBE_API_KEY1')
     api_service_name = 'youtube'
     api_version = 'v3'
@@ -56,6 +81,7 @@ def get_channel_stats(channel_id: str) -> pd.DataFrame:
             'channel_id':item.get('id'),
             'channel_title': item['snippet'].get('title'),
             'description': item['snippet'].get('description'),
+            'profile_picture': item['snippet']['thumbnails']['default'].get('url'),
             'published_at':item['snippet'].get('publishedAt'),
             'country':item['snippet'].get('country'),
             'playlist_id':item['contentDetails']['relatedPlaylists'].get('uploads'),
@@ -68,6 +94,25 @@ def get_channel_stats(channel_id: str) -> pd.DataFrame:
     
     # Return the Pandas Dataframe
     return df
+
+# Create a dataframe for the channel_data table
+def create_channel_data_df(channel_ids: list) -> pd.DataFrame:
+    # Initialize an empty list to collect DataFrames
+    df_list = []
+    
+    # Iterate over each channel_id in the list
+    for channel_id in channel_ids:
+        # Get the DataFrame for each channel_id using the existing get_channel_data function
+        df_channel = get_channel_data(channel_id)
+        
+        # Append the resulting DataFrame to the list
+        df_list.append(df_channel)
+    
+    # Concatenate all DataFrames in the list vertically (along axis 0)
+    result_df = pd.concat(df_list, ignore_index=True)
+    
+    # Return the final concatenated DataFrame
+    return result_df
 
 # When given a playlist_id it returns a list of video_ids
 def get_video_ids(playlist_id: str) -> list:
@@ -97,6 +142,24 @@ def get_video_ids(playlist_id: str) -> list:
             break
 
     return video_ids
+
+# Create a dataframe for the playlist_videos table
+def create_playlist_videos_df(playlist_ids: list) -> pd.DataFrame:
+    video_data = []  # List to store data as dictionaries
+
+    # Loop through each playlist_id in the input list
+    for playlist_id in playlist_ids:
+        # Get video IDs for the current playlist_id
+        video_ids = get_video_ids(playlist_id)
+        
+        # Append each video_id along with the playlist_id to the video_data list
+        for video_id in video_ids:
+            video_data.append({'playlist_id': playlist_id, 'video_id': video_id})
+
+    # Create a DataFrame from the collected video data
+    df = pd.DataFrame(video_data)
+
+    return df
 
 # Function to fetch video statistics for a single video
 def get_video_stats(video_id: str) -> pd.DataFrame:
@@ -192,26 +255,32 @@ def main():
     # Load env variables from .env
     load_dotenv()
     
-    channel_id = get_channel_id('@핑크퐁')
-    print(f"{channel_id = }")
+    # Create the channels table
+    channel_data = {
+        'channel_character': ['핑크퐁', '올리', '베베핀'],
+        'channel_handle': ['@핑크퐁', '@BabyShark_Korean', '@베베핀']
+    }
+    df_channels = create_channels_df(channel_data)
+    df_channels.to_csv('../data/raw/channels.csv', header=True, index=False)
     
-    df_channel_stats = get_channel_stats(channel_id)
-    df_channel_stats.to_csv('../data/raw/channel_stats.csv', header=True, index=False)
-    print(f"{df_channel_stats = }")
-    
-    playlist_id = df_channel_stats['playlist_id'].values[0]
-    print(f"{playlist_id = }")
-    
-    video_ids_list = get_video_ids(playlist_id)
-    print(f"{video_ids_list = }")
-    
-    df_video_stats = get_video_stats_in_chunks(video_ids_list)
+    # Create the channel_data table
+    channel_ids = pd.read_csv('../data/raw/channels.csv')['channel_id'].tolist()
+    df_channel_data = create_channel_data_df(channel_ids)
+    df_channel_data.to_csv('../data/raw/channel_data.csv', header=True, index=False)
+
+    # Create the playlist_videos table
+    playlist_ids = pd.read_csv('../data/raw/channel_data.csv')['playlist_id'].tolist()
+    df_playlist_videos = create_playlist_videos_df(playlist_ids)
+    df_playlist_videos.to_csv('../data/raw/playlist_videos.csv', header=True, index=False)
+
+    # Create the video_stats table
+    video_ids = pd.read_csv('../data/raw/playlist_videos.csv')['video_id'].tolist()
+    df_video_stats = get_video_stats_in_chunks(video_ids)
     df_video_stats.to_csv('../data/raw/video_stats.csv', header=True, index=False)
-    print(f"{df_video_stats = }")
     
+    # Create the video_categories table
     df_video_categories = get_video_category_names('KR')
     df_video_categories.to_csv('../data/raw/video_categories.csv', header=True, index=False)
-    print(f"{df_video_categories = }")
 
 
 if __name__ == "__main__":
