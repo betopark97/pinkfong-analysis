@@ -1,0 +1,66 @@
+Table "channel_metadata" {
+  "channel_id" text PK
+  "channel_title" text
+  "description" text
+  "profile_picture" text
+  "published_at" text
+  "country" text
+  "playlist_id" text
+  "channel_character" text
+  "channel_handle" text
+  "channel_link" text
+}
+
+Table "channel_stats" {
+  "channel_id" text PK
+  "subscriber_count" bigint
+  "video_count" bigint
+  "view_count" bigint
+}
+
+Table "playlist_videos" {
+  "playlist_id" text 
+  "video_id" text PK
+}
+
+Table "tags" {
+  "tag_id" bigint PK
+  "tag" text 
+}
+
+Table "video_categories" {
+  "category_id" bigint PK
+  "category_name" text
+}
+
+Table "video_metadata" {
+  "video_id" text PK
+  "published_at" text
+  "title" text
+  "description" text
+  "thumbnails" text
+  "tags" text
+  "category_id" bigint
+  "default_audio_language" text
+  "duration" text
+}
+
+Table "video_stats" {
+  "video_id" text PK
+  "view_count" bigint
+  "like_count" doubleprecision
+  "comment_count" doubleprecision
+}
+
+Table "video_tags" {
+  "video_id" text PK
+  "tag_id" bigint PK
+}
+
+Ref: channel_metadata.channel_id - channel_stats.channel_id
+Ref: channel_metadata.playlist_id < playlist_videos.playlist_id
+Ref: playlist_videos.video_id - video_metadata.video_id
+Ref: video_metadata.video_id - video_stats.video_id
+Ref: video_metadata.video_id < video_tags.video_id
+Ref: video_tags.tag_id > tags.tag_id
+Ref: video_metadata.category_id > video_categories.category_id
